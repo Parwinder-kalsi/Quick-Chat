@@ -27,12 +27,15 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     Timestamp? timeStamp = widget.data['timestamp'];
     DateTime? time = timeStamp?.toDate();
-
     String formattedTime = "";
     if (time != null) {
-      formattedTime = "${time.hour}:${time.minute.toString().padLeft(2, '0')}";
+      int hour = time.hour;
+      String period = hour >= 12 ? 'PM' : 'AM';
+      hour = hour % 12;
+      if (hour == 0) hour = 12;
+      formattedTime =
+      "$hour:${time.minute.toString().padLeft(2, '0')} $period";
     }
-
     return Obx(() {
       final messageId = widget.data["messageId"];
       final senderId = widget.data["senderId"];
@@ -43,7 +46,7 @@ class _MessageBubbleState extends State<MessageBubble> {
         alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: GestureDetector(
           onLongPress: () {
-            if (!widget.isMe) return;
+            // if (!widget.isMe) return;
             if (isSelected) {
               widget.onUnselect(messageId);
             } else {

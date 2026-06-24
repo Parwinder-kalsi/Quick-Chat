@@ -45,13 +45,13 @@ class ChatController extends GetxController {
         .doc(chatId)
         .collection('messages')
         .add({
-      "senderId": currentUser.uid,
-      "receiverId": receiverId,
-      "message": message,
-      "timestamp": FieldValue.serverTimestamp(),
-      "isSeen": false,
-      "type": "text",
-    });
+          "senderId": currentUser.uid,
+          "receiverId": receiverId,
+          "message": message,
+          "timestamp": FieldValue.serverTimestamp(),
+          "isSeen": false,
+          "type": "text",
+        });
     await firestore.collection('chats').doc(chatId).set({
       "participantIds": [currentUser.uid, receiverId],
       "participants": [
@@ -176,12 +176,9 @@ class ChatController extends GetxController {
       ids.sort();
       String chatId = ids.join("_");
 
-      String fileName =
-          "${DateTime.now().millisecondsSinceEpoch}.jpg";
+      String fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
 
-      Reference ref = storage
-          .ref()
-          .child("chat_media/$chatId/$fileName");
+      Reference ref = storage.ref().child("chat_media/$chatId/$fileName");
 
       await ref.putFile(selectedFile.value!);
 
@@ -201,8 +198,7 @@ class ChatController extends GetxController {
           {
             "id": receiverId,
             "name": receiverData?['name'] ?? receiverName,
-            "imageUrl":
-            receiverData?['imageUrl'] ?? receiverImage,
+            "imageUrl": receiverData?['imageUrl'] ?? receiverImage,
           },
         ],
         "lastMessage": "📷 Image",
@@ -215,17 +211,15 @@ class ChatController extends GetxController {
           .doc(chatId)
           .collection('messages')
           .add({
-        "senderId": currentUser.uid,
-        "receiverId": receiverId,
-        "message": fileUrl,
-        "timestamp": FieldValue.serverTimestamp(),
-        "isSeen": false,
-        "type": "image",
-      });
+            "senderId": currentUser.uid,
+            "receiverId": receiverId,
+            "message": fileUrl,
+            "timestamp": FieldValue.serverTimestamp(),
+            "isSeen": false,
+            "type": "image",
+          });
 
-      await messageRef.update({
-        "messageId": messageRef.id,
-      });
+      await messageRef.update({"messageId": messageRef.id});
 
       selectedFile.value = null;
 
@@ -283,15 +277,12 @@ class ChatController extends GetxController {
     if (await Permission.contacts.request().isGranted) {
       return [];
     }
-    final contacts = await FlutterContacts.getAll(
-    );
+    final contacts = await FlutterContacts.getAll();
     List<String> phoneNumbers = [];
 
     for (var contact in contacts) {
       for (var phone in contact.phones) {
-        String number = phone.number
-            .replaceAll(" ", "")
-            .replaceAll("-", "");
+        String number = phone.number.replaceAll(" ", "").replaceAll("-", "");
 
         if (number.isNotEmpty) {
           phoneNumbers.add(number);
@@ -300,10 +291,12 @@ class ChatController extends GetxController {
     }
     return phoneNumbers;
   }
+
   Future<List<Map<String, dynamic>>> getAppContacts() async {
     List<Object> phoneContacts = await getPhoneContacts();
-    QuerySnapshot usersSnap =
-    await FirebaseFirestore.instance.collection("users_qc").get();
+    QuerySnapshot usersSnap = await FirebaseFirestore.instance
+        .collection("users_qc")
+        .get();
     List<Map<String, dynamic>> matchedUsers = [];
     for (var doc in usersSnap.docs) {
       var data = doc.data() as Map<String, dynamic>;
@@ -315,16 +308,13 @@ class ChatController extends GetxController {
     return matchedUsers;
   }
 
-
   void showDeleteOptionsDialog({
     required BuildContext context,
     required String messageId,
     required String currentUserId,
     required String senderId,
     required String receiverId,
-  })
-  {
-
+  }) {
     final bool isSender = currentUserId == senderId;
     List<String> ids = [currentUserId, receiverId];
     ids.sort();
@@ -337,26 +327,26 @@ class ChatController extends GetxController {
           content: const Text('Choose how you want to delete this message.'),
           actionsAlignment: MainAxisAlignment.end,
           actions: [
-
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
-
-
             TextButton(
               onPressed: () async {
                 try {
-                  await FirebaseFirestore.instance
-                      .collection('chats')
-                      .doc(chatId)
-                      .collection('messages')
-                      .doc(messageId)
-                      .update({
-                    'deletedForUsers': FieldValue.arrayUnion([currentUserId]),
-                  });
+                  for (String messageId in selectedMessages) {
+                    await FirebaseFirestore.instance
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .doc(messageId)
+                        .update({
+                          'deletedForUsers': FieldValue.arrayUnion([
+                            currentUserId,
+                          ]),
+                        });
+                  }
                   if (context.mounted) Navigator.pop(dialogContext);
-
                   refreshSelectMessage();
                 } catch (e) {
                   _showErrorSnackBar(context, e.toString());
@@ -364,7 +354,6 @@ class ChatController extends GetxController {
               },
               child: const Text('Delete for me'),
             ),
-
             if (isSender)
               TextButton(
                 onPressed: () async {
@@ -393,15 +382,13 @@ class ChatController extends GetxController {
   }
   void _showErrorSnackBar(BuildContext context, String error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $error')));
     }
   }
 
-
   void refreshSelectMessage() {
     selectedMessages.clear();
-
   }
 }

@@ -20,9 +20,9 @@ class _HomeScreenState extends State<HomeScreen> {
     notificationService.requestNotificationPermission();
     notificationService.getFcmToken();
     notificationService.localNotification();
-    FirebaseMessaging.instance.getInitialMessage().then((message) {
-      notificationService.showNotification(message!);
-    });
+    // FirebaseMessaging.instance.getInitialMessage().then((message) {
+    //   notificationService.showNotification(message!);
+    // });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       notificationService.showNotification(message);

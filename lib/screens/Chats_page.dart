@@ -15,6 +15,21 @@ class ChatsPage extends StatefulWidget {
 class _ChatsPageState extends State<ChatsPage> {
   final ChatController chatController = Get.put(ChatController());
   final currentUser = FirebaseAuth.instance.currentUser;
+  // Set<String> selectedChatIds = {};
+  // bool multiSelectionMode = false;
+  // bool isSelected(String chatId) => selectedChatIds.contains(chatId);
+  //
+  // void selection(ChatsPage chat) {
+  //     if (selectedChatIds.contains(chat)) {
+  //       selectedChatIds.remove(chat);
+  //       if (selectedChatIds.isEmpty) {
+  //         multiSelectionMode = false;
+  //       }
+  //     } else {
+  //       selectedChatIds.add(chat as String);
+  //       multiSelectionMode = true;
+  //     }
+  // }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -54,8 +69,14 @@ class _ChatsPageState extends State<ChatsPage> {
               String time = "";
               if (timestamp != null) {
                 DateTime date = timestamp.toDate();
-                time = "${date.hour}:${date.minute.toString().padLeft(2, '0')}";
+                int hour = date.hour;
+                String period = hour >= 12 ? 'PM' : 'AM';
+                hour = hour % 12;
+                if (hour == 0) hour = 12;
+                time =
+                "$hour:${date.minute.toString().padLeft(2, '0')} $period";
               }
+
               return InkWell(
                 onTap: () {
                   Get.to(
@@ -67,6 +88,9 @@ class _ChatsPageState extends State<ChatsPage> {
                       ),
                     ),
                   );
+                },
+                onLongPress: () {
+
                 },
                 child: Container(
                   margin: const EdgeInsets.symmetric(
