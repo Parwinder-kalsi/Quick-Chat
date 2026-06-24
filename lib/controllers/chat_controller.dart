@@ -19,6 +19,7 @@ class ChatController extends GetxController {
   final ImagePicker picker = ImagePicker();
   Rx<File?> selectedFile = Rx<File?>(null);
   RxBool isImage = true.obs;
+
   final FirebaseAuth auth = FirebaseAuth.instance;
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final FirebaseStorage storage = FirebaseStorage.instance;
@@ -39,12 +40,24 @@ class ChatController extends GetxController {
     List<String> ids = [currentUser.uid, receiverId];
     ids.sort();
     String chatId = ids.join("_");
+    final messageRef = await firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .add({
+      "senderId": currentUser.uid,
+      "receiverId": receiverId,
+      "message": message,
+      "timestamp": FieldValue.serverTimestamp(),
+      "isSeen": false,
+      "type": "text",
+    });
     await firestore.collection('chats').doc(chatId).set({
       "participantIds": [currentUser.uid, receiverId],
       "participants": [
         {
           "id": currentUser.uid,
-          "name": currentUserData?['name'] ?? "",
+          "name": currentUser.displayName,
           "imageUrl": currentUserData?['imageUrl'] ?? "",
         },
         {"id": receiverId, "name": receiverName, "imageUrl": receiverImage},
@@ -53,18 +66,7 @@ class ChatController extends GetxController {
       "lastMessageTime": FieldValue.serverTimestamp(),
       "createdAt": FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-    final messageRef = await firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .add({
-          "senderId": currentUser.uid,
-          "receiverId": receiverId,
-          "message": message,
-          "timestamp": FieldValue.serverTimestamp(),
-          "isSeen": false,
-          "type": "text",
-        });
+
     await messageRef.update({"messageId": messageRef.id});
   }
 
@@ -141,64 +143,97 @@ class ChatController extends GetxController {
   Future<void> sendMediaMessage({
     required String receiverId,
     required String receiverName,
+    required String receiverImage,
   }) async {
-    debugPrint("🔥 FUNCTION ENTERED");
+    print("receiverId: $receiverId");
+    print("receiverName: '$receiverName'");
+    print("receiverImage: '$receiverImage'");
+
     final currentUser = auth.currentUser;
-
-    print("SEND CALLED");
-    print("FILE: ${selectedFile.value}");
-
     if (currentUser == null || selectedFile.value == null) {
-      print("BLOCKED: USER OR FILE NULL");
+      print("Current user or selected file is null");
       return;
     }
-
-    List<String> ids = [currentUser.uid, receiverId];
-    ids.sort();
-    String chatId = ids.join("_");
-
-    String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-
-    Reference ref = storage.ref().child("chat_media/$chatId/$fileName");
 
     try {
+      final senderDoc = await firestore
+          .collection('users_qc')
+          .doc(currentUser.uid)
+          .get();
+
+      final receiverDoc = await firestore
+          .collection('users_qc')
+          .doc(receiverId)
+          .get();
+
+      final senderData = senderDoc.data();
+      final receiverData = receiverDoc.data();
+
+      print("SENDER DATA: $senderData");
+      print("RECEIVER DATA: $receiverData");
+
+      List<String> ids = [currentUser.uid, receiverId];
+      ids.sort();
+      String chatId = ids.join("_");
+
+      String fileName =
+          "${DateTime.now().millisecondsSinceEpoch}.jpg";
+
+      Reference ref = storage
+          .ref()
+          .child("chat_media/$chatId/$fileName");
+
       await ref.putFile(selectedFile.value!);
-    } catch (e) {
-      print("UPLOAD FAILED: $e");
-      return;
+
+      String fileUrl = await ref.getDownloadURL();
+
+      print("FILE URL: $fileUrl");
+      print("Receiver NNN ${receiverData?['name']}");
+
+      await firestore.collection('chats').doc(chatId).set({
+        "participantIds": [currentUser.uid, receiverId],
+        "participants": [
+          {
+            "id": currentUser.uid,
+            "name": senderData?['name'] ?? "",
+            "imageUrl": senderData?['imageUrl'] ?? "",
+          },
+          {
+            "id": receiverId,
+            "name": receiverData?['name'] ?? receiverName,
+            "imageUrl":
+            receiverData?['imageUrl'] ?? receiverImage,
+          },
+        ],
+        "lastMessage": "📷 Image",
+        "lastMessageTime": FieldValue.serverTimestamp(),
+        "createdAt": FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      final messageRef = await firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .add({
+        "senderId": currentUser.uid,
+        "receiverId": receiverId,
+        "message": fileUrl,
+        "timestamp": FieldValue.serverTimestamp(),
+        "isSeen": false,
+        "type": "image",
+      });
+
+      await messageRef.update({
+        "messageId": messageRef.id,
+      });
+
+      selectedFile.value = null;
+
+      print("IMAGE MESSAGE SENT SUCCESSFULLY");
+    } catch (e, stackTrace) {
+      print("SEND MEDIA ERROR: $e");
+      print(stackTrace);
     }
-
-    String fileUrl = await ref.getDownloadURL();
-
-    print("UPLOAD SUCCESS: $fileUrl");
-
-    await firestore.collection('chats').doc(chatId).set({
-      "participantIds": [currentUser.uid, receiverId],
-      "participants": [
-        {"id": currentUser.uid, "name": ""},
-        {"id": receiverId, "name": receiverName},
-      ],
-      "lastMessage": "📷 Image",
-      "lastMessageTime": FieldValue.serverTimestamp(),
-      "createdAt": FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-
-    final messageRef = firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc();
-
-    await messageRef.set({
-      "messageId": messageRef.id,
-      "senderId": currentUser.uid,
-      "receiverId": receiverId,
-      "message": fileUrl,
-      "timestamp": FieldValue.serverTimestamp(),
-      "isSeen": false,
-      "type": "image",
-    });
-    selectedFile.value = null;
   }
 
   Future<void> markMessagesAsSeen(String receiverId) async {
@@ -278,5 +313,95 @@ class ChatController extends GetxController {
       }
     }
     return matchedUsers;
+  }
+
+
+  void showDeleteOptionsDialog({
+    required BuildContext context,
+    required String messageId,
+    required String currentUserId,
+    required String senderId,
+    required String receiverId,
+  })
+  {
+
+    final bool isSender = currentUserId == senderId;
+    List<String> ids = [currentUserId, receiverId];
+    ids.sort();
+    String chatId = ids.join("_");
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Message?'),
+          content: const Text('Choose how you want to delete this message.'),
+          actionsAlignment: MainAxisAlignment.end,
+          actions: [
+
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+
+
+            TextButton(
+              onPressed: () async {
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('chats')
+                      .doc(chatId)
+                      .collection('messages')
+                      .doc(messageId)
+                      .update({
+                    'deletedForUsers': FieldValue.arrayUnion([currentUserId]),
+                  });
+                  if (context.mounted) Navigator.pop(dialogContext);
+
+                  refreshSelectMessage();
+                } catch (e) {
+                  _showErrorSnackBar(context, e.toString());
+                }
+              },
+              child: const Text('Delete for me'),
+            ),
+
+            if (isSender)
+              TextButton(
+                onPressed: () async {
+                  try {
+                    for (String messageId in selectedMessages) {
+                      await FirebaseFirestore.instance
+                          .collection('chats')
+                          .doc(chatId)
+                          .collection('messages')
+                          .doc(messageId)
+                          .delete();
+                    }
+                    if (context.mounted) Navigator.pop(dialogContext);
+                    refreshSelectMessage();
+                  } catch (e) {
+                    _showErrorSnackBar(context, e.toString());
+                  }
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete for everyone'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+  void _showErrorSnackBar(BuildContext context, String error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $error')),
+      );
+    }
+  }
+
+
+  void refreshSelectMessage() {
+    selectedMessages.clear();
+
   }
 }

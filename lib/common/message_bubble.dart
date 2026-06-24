@@ -6,7 +6,7 @@ class MessageBubble extends StatefulWidget {
   final Map<String, dynamic> data;
   final bool isMe;
   final List<dynamic> selectedMessages;
-  final Function(String id) onSelect;
+  final Function(String id,String senderId,String receiverId) onSelect;
   final Function(String id) onUnselect;
 
   const MessageBubble({
@@ -35,6 +35,9 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     return Obx(() {
       final messageId = widget.data["messageId"];
+      final senderId = widget.data["senderId"];
+      final receiverId = widget.data["receiverId"];
+
       final isSelected = widget.selectedMessages.contains(messageId);
       return Align(
         alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -44,7 +47,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             if (isSelected) {
               widget.onUnselect(messageId);
             } else {
-              widget.onSelect(messageId);
+              widget.onSelect(messageId,senderId,receiverId);
             }
           },
           onTap: () {
@@ -52,7 +55,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               if (isSelected) {
                 widget.onUnselect(messageId);
               } else {
-                widget.onSelect(messageId);
+                widget.onSelect(messageId,senderId,receiverId);
               }
             }
           },

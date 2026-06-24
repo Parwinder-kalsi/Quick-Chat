@@ -21,6 +21,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
   final TextEditingController messageController = TextEditingController();
   final currentUser = FirebaseAuth.instance.currentUser;
   bool isSend = true;
+  String selectedMessageId = "";
+  String senderMessageId = "";
+  String receiverMessageId = "";
 
   @override
   void initState() {
@@ -29,7 +32,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
     chatController.markMessagesAsSeen(widget.user.uid!);
   }
 
-  void select(String id) {
+  void select(String id, String senderId, String receiverId) {
+    selectedMessageId = id;
+    senderMessageId = senderId;
+    receiverMessageId = receiverId;
+    print("id $id");
+    print("senderId $senderId");
     chatController.selectedMessages.add(id);
   }
 
@@ -114,36 +122,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     icon: const Icon(Icons.close, color: Colors.white),
                   ),
                   IconButton(
-                    onPressed: () async {
-                      final currentUser = FirebaseAuth.instance.currentUser!;
-                      final receiverId = widget.user.uid!;
-
-                      List<String> ids = [currentUser.uid, receiverId];
-                      ids.sort();
-                      String chatId = ids.join("_");
-                      Get.defaultDialog(
-                        title: "Delete Messages",
-                        middleText: "Delete for everyone or just you?",
-                        textConfirm: "Delete",
-                        textCancel: "Cancel",
-                        onConfirm: () async {
-                          for (String messageId
-                              in chatController.selectedMessages) {
-                            await chatController.deleteMessage(
-                              chatId: chatId,
-                              messageId: messageId,
-                              forEveryone: true,
-                            );
-                          }
-                          chatController.selectedMessages.clear();
-                          Get.back();
-                        },
-                        onCancel: () {
-                          chatController.selectedMessages.clear();
-                        },
-                      );
-                    },
                     icon: const Icon(Icons.delete, color: Colors.white),
+                    onPressed: () {
+                      chatController.showDeleteOptionsDialog(
+                        context: context,
+                        messageId: selectedMessageId,
+                        currentUserId: currentUser!.uid,
+                        senderId: senderMessageId,
+                        receiverId: receiverMessageId,
+                      );
+
+                    },
                   ),
                 ],
               );
@@ -184,19 +173,30 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ),
                   );
                 }
-                final messages = snapshot.data!.docs;
+                final messages = snapshot.data!.docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+
+                  final deletedForUsers =
+                  List<String>.from(data['deletedForUsers'] ?? []);
+                  return !deletedForUsers.contains(currentUser?.uid);
+                }).toList();
                 return ListView.builder(
+                  reverse: true,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 12,
                   ),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final data = messages[index].data() as Map<String, dynamic>;
+                    final reversedIndex = messages.length - 1 - index;
+                    final messageSnapshot = messages[reversedIndex];
+                    final data = messageSnapshot.data() as Map<String, dynamic>;
                     final bool isMe = data['senderId'] == currentUser!.uid;
+
                     Timestamp? timeStamp = data['timestamp'];
                     DateTime? time = timeStamp?.toDate();
                     if (time != null) {}
+
                     return MessageBubble(
                       data: data,
                       isMe: isMe,
@@ -286,7 +286,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    onPressed: ()  {
+                    onPressed: () {
                       chatController.pickFromCamera();
                     },
                     icon: const Icon(
@@ -295,8 +295,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ),
                   ),
                   Expanded(
-                    child:
-                    Container(
+                    child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
@@ -326,23 +325,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             return;
                           }
                           isSend = false;
-                          await chatController.chats(
+                        String  message = messageController.text.trim();
+                          messageController.clear();
+
+                        await chatController.chats(
                             receiverId: widget.user.uid!,
                             receiverName: widget.user.name ?? "",
                             receiverImage: widget.user.imageUrl ?? "",
-                            message: messageController.text.trim(),
+                            message: message,
                           );
-                          messageController.clear();
                         }
                         if (chatController.selectedFile.value != null) {
                           await chatController.sendMediaMessage(
                             receiverId: widget.user.uid!,
                             receiverName: widget.user.name ?? "",
+                            receiverImage: widget.user.imageUrl ?? "",
                           );
                         }
-                        Future.delayed(Duration(milliseconds: 500), () {
                           isSend = true;
-                        });
                       },
                       icon: const Icon(Icons.send, color: Colors.black),
                     ),

@@ -1,12 +1,10 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:quick_chat/common/app_bar.dart';
-import 'package:quick_chat/controllers/chat_controller.dart';
 import 'package:quick_chat/notificationservice/notification_service.dart';
 import 'package:quick_chat/screens/Chats_page.dart';
 import 'package:quick_chat/screens/Profile_page.dart';
 import 'package:quick_chat/screens/contacts_page.dart';
-import 'package:get/get.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,13 +22,14 @@ class _HomeScreenState extends State<HomeScreen> {
     notificationService.localNotification();
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       notificationService.showNotification(message!);
-    },);
+    });
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       notificationService.showNotification(message);
     });
     super.initState();
   }
+
   int currentIndex = 0;
   final List<Widget> pages = const [ChatsPage(), ContactsPage(), ProfilePage()];
 

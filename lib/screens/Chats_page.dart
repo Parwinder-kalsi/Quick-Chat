@@ -32,6 +32,7 @@ class _ChatsPageState extends State<ChatsPage> {
           return ListView.builder(
             itemCount: chats.length,
             itemBuilder: (context, index) {
+
               final data = chats[index].data() as Map<String, dynamic>;
               List participants = data['participants'] ?? [];
               Map<String, dynamic>? otherUser;
@@ -91,10 +92,18 @@ class _ChatsPageState extends State<ChatsPage> {
                             .doc(receiverId)
                             .snapshots(),
                         builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (!snapshot.hasData ) {
+                            return const Center(child: Text("No chats yet 👋"));
+                          }
                           String imageUrl = "";
+                          String name = "";
                           if (snapshot.hasData && snapshot.data!.data() != null) {
                             final data = snapshot.data!.data() as Map<String, dynamic>;
                             imageUrl = data['imageUrl'] ?? "";
+                            name= data['name'] ?? "";
                           }
                           return CircleAvatar(
                             radius: 28,
@@ -103,8 +112,9 @@ class _ChatsPageState extends State<ChatsPage> {
                                 ? NetworkImage(imageUrl)
                                 : null,
                             child: imageUrl.trim().isEmpty
-                                ? Text(
-                              receiverName[0].toUpperCase(),
+                                ?
+                            Text(
+                              name[0].toUpperCase(),
                               style: const TextStyle(
                                 color: Colors.black,
                                 fontWeight: FontWeight.bold,
