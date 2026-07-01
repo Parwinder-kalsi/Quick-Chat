@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 class ChatController extends GetxController {
   RxList<dynamic> selectedMessages = [].obs;
+  RxList<String> selectedChats = <String>[].obs;
 
   bool isSelected(String id) {
     return selectedMessages.contains(id);
@@ -32,11 +33,10 @@ class ChatController extends GetxController {
   }) async {
     final currentUser = auth.currentUser;
     if (currentUser == null) return;
-    final currentUserDoc = await firestore
-        .collection('users_qc')
-        .doc(currentUser.uid)
-        .get();
-    final currentUserData = currentUserDoc.data();
+    // final currentUserDoc = await firestore
+    //     .collection('users_qc')
+    //     .doc(currentUser.uid)
+    //     .get();
     List<String> ids = [currentUser.uid, receiverId];
     ids.sort();
     String chatId = ids.join("_");
@@ -54,20 +54,38 @@ class ChatController extends GetxController {
         });
     await firestore.collection('chats').doc(chatId).set({
       "participantIds": [currentUser.uid, receiverId],
-      "participants": [
-        {
-          "id": currentUser.uid,
-          "name": currentUser.displayName,
-          "imageUrl": currentUserData?['imageUrl'] ?? "",
-        },
-        {"id": receiverId, "name": receiverName, "imageUrl": receiverImage},
-      ],
       "lastMessage": message,
+      "lastMessageId": messageRef.id,
       "lastMessageTime": FieldValue.serverTimestamp(),
       "createdAt": FieldValue.serverTimestamp(),
+      "deletedForUsers": FieldValue.arrayRemove([currentUser.uid, receiverId]),
     }, SetOptions(merge: true));
-
     await messageRef.update({"messageId": messageRef.id});
+    await firestore.collection('chats').doc(chatId).update({
+      "deletedForUsers": FieldValue.arrayRemove([currentUser.uid, receiverId]),
+    });
+  }
+
+  Future<String?> getChatId(String currentUserId, String otherUserId) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participantIds', arrayContains: currentUserId)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final participantIds = List<String>.from(doc['participantIds']);
+
+        if (participantIds.contains(otherUserId)) {
+          return doc.id;
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print('Error fetching chatId: $e');
+      return null;
+    }
   }
 
   Stream<QuerySnapshot> getMessages(String receiverId) {
@@ -83,12 +101,32 @@ class ChatController extends GetxController {
         .snapshots();
   }
 
-  Stream<QuerySnapshot> getChats() {
-    final currentUser = auth.currentUser;
+  Stream<List<Map<String, dynamic>>> getChats() {
+    final currentUser = auth.currentUser!;
+
     return firestore
         .collection('chats')
-        .where('participantIds', arrayContains: currentUser?.uid)
-        .snapshots();
+        .where('participantIds', arrayContains: currentUser.uid)
+        .orderBy('lastMessageTime', descending: true)
+        .snapshots()
+        .asyncMap((snapshot) async {
+          return Future.wait(
+            snapshot.docs.map((chat) async {
+              final participants = List<String>.from(chat['participantIds']);
+
+              final receiverId = participants.firstWhere(
+                (id) => id != currentUser.uid,
+              );
+
+              final user = await firestore
+                  .collection('users_qc')
+                  .doc(receiverId)
+                  .get();
+
+              return {"chat": chat, "user": user};
+            }),
+          );
+        });
   }
 
   Future<void> pickMedia() async {
@@ -145,10 +183,6 @@ class ChatController extends GetxController {
     required String receiverName,
     required String receiverImage,
   }) async {
-    print("receiverId: $receiverId");
-    print("receiverName: '$receiverName'");
-    print("receiverImage: '$receiverImage'");
-
     final currentUser = auth.currentUser;
     if (currentUser == null || selectedFile.value == null) {
       print("Current user or selected file is null");
@@ -156,21 +190,15 @@ class ChatController extends GetxController {
     }
 
     try {
-      final senderDoc = await firestore
-          .collection('users_qc')
-          .doc(currentUser.uid)
-          .get();
-
-      final receiverDoc = await firestore
-          .collection('users_qc')
-          .doc(receiverId)
-          .get();
-
-      final senderData = senderDoc.data();
-      final receiverData = receiverDoc.data();
-
-      print("SENDER DATA: $senderData");
-      print("RECEIVER DATA: $receiverData");
+      // final senderDoc = await firestore
+      //     .collection('users_qc')
+      //     .doc(currentUser.uid)
+      //     .get();
+      //
+      // final receiverDoc = await firestore
+      //     .collection('users_qc')
+      //     .doc(receiverId)
+      //     .get();
 
       List<String> ids = [currentUser.uid, receiverId];
       ids.sort();
@@ -184,23 +212,8 @@ class ChatController extends GetxController {
 
       String fileUrl = await ref.getDownloadURL();
 
-      print("FILE URL: $fileUrl");
-      print("Receiver NNN ${receiverData?['name']}");
-
       await firestore.collection('chats').doc(chatId).set({
         "participantIds": [currentUser.uid, receiverId],
-        "participants": [
-          {
-            "id": currentUser.uid,
-            "name": senderData?['name'] ?? "",
-            "imageUrl": senderData?['imageUrl'] ?? "",
-          },
-          {
-            "id": receiverId,
-            "name": receiverData?['name'] ?? receiverName,
-            "imageUrl": receiverData?['imageUrl'] ?? receiverImage,
-          },
-        ],
         "lastMessage": "📷 Image",
         "lastMessageTime": FieldValue.serverTimestamp(),
         "createdAt": FieldValue.serverTimestamp(),
@@ -248,20 +261,63 @@ class ChatController extends GetxController {
     }
   }
 
-  Future<void> deleteMessage({
-    required String chatId,
-    required String messageId,
-    required bool forEveryone,
-  }) async {
-    final ref = firestore
-        .collection('chats')
-        .doc(chatId)
-        .collection('messages')
-        .doc(messageId);
-
-    if (forEveryone) {
-      await ref.delete();
-    }
+  void deleteChatDialog({
+    required BuildContext context,
+    required String currentUserId,
+  }) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Chat?'),
+          content: const Text('This chat will be removed only for you'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  for (final chatId in selectedChats) {
+                    await FirebaseFirestore.instance
+                        .collection('chats')
+                        .doc(chatId)
+                        .update({
+                          'deletedForUsers': FieldValue.arrayUnion([
+                            currentUserId,
+                          ]),
+                        });
+                    final messages = await FirebaseFirestore.instance
+                        .collection('chats')
+                        .doc(chatId)
+                        .collection('messages')
+                        .get();
+                    final batch = FirebaseFirestore.instance.batch();
+                    for (final doc in messages.docs) {
+                      batch.update(doc.reference, {
+                        'deletedForUsers': FieldValue.arrayUnion([
+                          currentUserId,
+                        ]),
+                      });
+                    }
+                    await batch.commit();
+                  }
+                  if (context.mounted) Navigator.pop(dialogContext);
+                  selectedChats.clear();
+                  refresh();
+                  update();
+                  update(['appbar']);
+                } catch (e) {
+                  debugPrint("Delete Chat Error: $e");
+                }
+              },
+              child: const Text("Delete for me"),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> pickFromCamera() async {
@@ -308,23 +364,53 @@ class ChatController extends GetxController {
     return matchedUsers;
   }
 
-  void showDeleteOptionsDialog({
+  Future<bool> currentUserMessages(
+    String chatId,
+    RxList<dynamic> messageIds,
+    String currentUserId,
+  ) async {
+    for (final messageId in messageIds) {
+      final doc = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(messageId)
+          .get();
+
+      if (!doc.exists) {
+        return false;
+      }
+
+      if (doc.data()?['senderId'] != currentUserId) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  Future<void> showDeleteOptionsDialog({
     required BuildContext context,
     required String messageId,
+    required String chatId,
     required String currentUserId,
     required String senderId,
     required String receiverId,
-  }) {
-    final bool isSender = currentUserId == senderId;
-    List<String> ids = [currentUserId, receiverId];
-    ids.sort();
-    String chatId = ids.join("_");
+  }) async {
+    final bool isSenderMe = currentUserId == senderId;
+    final bool userMessages = await currentUserMessages(
+      chatId,
+      selectedMessages,
+      currentUserId,
+    );
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text('Delete Message?'),
-          content: const Text('Choose how you want to delete this message.'),
+          content: const Text(
+            'Are you sure you want to delete the selected messages?',
+          ),
           actionsAlignment: MainAxisAlignment.end,
           actions: [
             TextButton(
@@ -334,10 +420,12 @@ class ChatController extends GetxController {
             TextButton(
               onPressed: () async {
                 try {
+                  final chatRef = FirebaseFirestore.instance
+                      .collection('chats')
+                      .doc(chatId);
+
                   for (String messageId in selectedMessages) {
-                    await FirebaseFirestore.instance
-                        .collection('chats')
-                        .doc(chatId)
+                    await chatRef
                         .collection('messages')
                         .doc(messageId)
                         .update({
@@ -346,33 +434,120 @@ class ChatController extends GetxController {
                           ]),
                         });
                   }
+
+                  final chatDoc = await chatRef.get();
+                  final lastMsgId = chatDoc.data()?['lastMessageId'];
+
+                  if (selectedMessages.contains(lastMsgId)) {
+                    final messages = await chatRef
+                        .collection('messages')
+                        .orderBy('timestamp', descending: true)
+                        .get();
+
+                    Map<String, dynamic>? newLastMessage;
+                    String? newLastMessageId;
+
+                    for (final doc in messages.docs) {
+                      final data = doc.data();
+                      final deletedFor = List<String>.from(data['deletedForUsers'] ?? []);
+
+                      if (!deletedFor.contains(currentUserId)) {
+                        newLastMessage = data;
+                        newLastMessageId = doc.id;
+                        break;
+                      }
+                    }
+
+                    await chatRef.update({
+                      'lastMessage': newLastMessage?['message'] ?? '',
+                      'lastMessageId': newLastMessageId ?? '',
+                      'lastMessageTime': newLastMessage?['timestamp'],
+                      'lastSenderId': newLastMessage?['senderId'] ?? '',
+                    });
+                  }
+
                   if (context.mounted) Navigator.pop(dialogContext);
+                  selectedMessages.clear();
                   refreshSelectMessage();
-                } catch (e) {
-                  _showErrorSnackBar(context, e.toString());
+                  update(['appbar']);
+                  } catch (e) {
+                  // _showErrorSnackBar(context, e.toString());
+                  debugPrint("Error: $e");
                 }
               },
               child: const Text('Delete for me'),
             ),
-            if (isSender)
+            if (isSenderMe && userMessages)
               TextButton(
                 onPressed: () async {
                   try {
+                    final chatRef = FirebaseFirestore.instance
+                        .collection('chats')
+                        .doc(chatId);
+
                     for (String messageId in selectedMessages) {
-                      await FirebaseFirestore.instance
-                          .collection('chats')
-                          .doc(chatId)
+                      await chatRef
                           .collection('messages')
                           .doc(messageId)
                           .delete();
+                          // .update({
+                          //   'deletedForUsers': FieldValue.arrayUnion([
+                          //     currentUserId,receiverId
+                          //   ]),
+                          // });
                     }
+
+                    final messages = await chatRef
+                        .collection('messages')
+                        .orderBy('timestamp', descending: true)
+                        .get();
+
+                    Map<String, dynamic>? lastVisibleMessage;
+                    String? lastVisibleMessageId;
+
+                    for (final doc in messages.docs) {
+                      final data = doc.data();
+
+                      final deletedForUsers = List<String>.from(
+                        data['deletedForUsers'] ?? [],
+                      );
+
+                      final deletedForEveryone =
+                          deletedForUsers.contains(currentUserId) &&
+                              deletedForUsers.contains(receiverId);
+
+                      if (!deletedForEveryone) {
+                        lastVisibleMessage = data;
+                        lastVisibleMessageId = doc.id;
+                        break;
+                      }
+                    }
+
+                    if (lastVisibleMessage != null) {
+                      await chatRef.update({
+                        'lastMessage': lastVisibleMessage['message'],
+                        'lastMessageId': lastVisibleMessageId,
+                        'lastMessageTime': lastVisibleMessage['timestamp'],
+                        'lastSenderId': lastVisibleMessage['senderId'],
+                      });
+                    } else {
+                      await chatRef.update({
+                        'lastMessage': '',
+                        'lastMessageId': '',
+                        'lastMessageTime': null,
+                        'lastSenderId': '',
+                      });
+                    }
+
                     if (context.mounted) Navigator.pop(dialogContext);
+                    selectedMessages.clear();
                     refreshSelectMessage();
+                    update(['appbar']);
                   } catch (e) {
-                    _showErrorSnackBar(context, e.toString());
+                    // _showErrorSnackBar(context, e.toString());
+                    debugPrint("Error: $e");
                   }
                 },
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: const Text('Delete for everyone'),
               ),
           ],
@@ -380,13 +555,14 @@ class ChatController extends GetxController {
       },
     );
   }
-  void _showErrorSnackBar(BuildContext context, String error) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $error')));
-    }
-  }
+
+  // void _showErrorSnackBar(BuildContext context, String error) {
+  //   if (context.mounted) {
+  //     ScaffoldMessenger.of(
+  //       context,
+  //     ).showSnackBar(SnackBar(content: Text('Error: $error')));
+  //   }
+  // }
 
   void refreshSelectMessage() {
     selectedMessages.clear();

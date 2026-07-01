@@ -4,6 +4,7 @@ import 'package:quick_chat/themes/colors.dart';
 
 class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
+  final String? titleWidget;
   final Widget? leading;
   final List<Widget>? actions;
 
@@ -11,13 +12,19 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.title,
     this.leading,
-    this.actions,
+    this.actions, this.titleWidget,
   });
 
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: AppText(title),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AppText(title),
+          AppText(titleWidget ?? ''),
+        ],
+      ),
       leading: leading,
       actions: actions,
       centerTitle: true,

@@ -9,8 +9,9 @@ import 'package:get/get.dart';
 
 class MessagesScreen extends StatefulWidget {
   final UserModel user;
+  final String chatId;
 
-  const MessagesScreen({super.key, required this.user});
+  const MessagesScreen({super.key, required this.user,required this.chatId});
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
@@ -36,8 +37,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
     selectedMessageId = id;
     senderMessageId = senderId;
     receiverMessageId = receiverId;
-    print("id $id");
-    print("senderId $senderId");
     chatController.selectedMessages.add(id);
   }
 
@@ -111,7 +110,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
         actions: [
           Obx(() {
             final isSelectionMode = chatController.selectedMessages.isNotEmpty;
-
             if (isSelectionMode) {
               return Row(
                 children: [
@@ -130,8 +128,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         currentUserId: currentUser!.uid,
                         senderId: senderMessageId,
                         receiverId: receiverMessageId,
+                        chatId:widget.chatId,
                       );
-
                     },
                   ),
                 ],
@@ -178,8 +176,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
                   final deletedForUsers =
                   List<String>.from(data['deletedForUsers'] ?? []);
-                  return !deletedForUsers.contains(currentUser?.uid);
+
+                  return !deletedForUsers.contains(currentUser!.uid);
                 }).toList();
+
                 return ListView.builder(
                   reverse: true,
                   padding: const EdgeInsets.symmetric(

@@ -1,10 +1,15 @@
+import 'dart:ui';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:quick_chat/common/app_bar.dart';
+import 'package:quick_chat/controllers/chat_controller.dart';
 import 'package:quick_chat/notificationservice/notification_service.dart';
 import 'package:quick_chat/screens/Chats_page.dart';
 import 'package:quick_chat/screens/Profile_page.dart';
 import 'package:quick_chat/screens/contacts_page.dart';
+import 'package:get/get.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,12 +19,18 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int currentIndex = 0;
+   PageController pageController = PageController();
+  final ChatController chatController = Get.put(ChatController());
+  final currentUser = FirebaseAuth.instance.currentUser;
+
   @override
   void initState() {
     NotificationService notificationService = NotificationService();
     notificationService.requestNotificationPermission();
     notificationService.getFcmToken();
     notificationService.localNotification();
+
     // FirebaseMessaging.instance.getInitialMessage().then((message) {
     //   notificationService.showNotification(message!);
     // });
@@ -30,23 +41,46 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
   }
 
-  int currentIndex = 0;
+  @override
+  void dispose() {
+    pageController.dispose();
+    super.dispose();
+  }
+
   final List<Widget> pages = const [ChatsPage(), ContactsPage(), ProfilePage()];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      appBar: CommonAppBar(title: 'Quick chat'),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Obx(
+          () => CommonAppBar(
+            title: chatController.selectedChats.isNotEmpty && currentIndex == 0
+                ? "${chatController.selectedChats.length} Selected"
+                : "Quick Chat",
+            actions: [
+              if (chatController.selectedChats.isNotEmpty && currentIndex == 0)
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () async {
+                    chatController.deleteChatDialog(context:context, currentUserId:currentUser!.uid );
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Container(
           height: 75,
           width: double.infinity,
-          margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.green[300],
-            borderRadius: BorderRadius.circular(50),
+            color: const Color(0xFF128C7E),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.06),
@@ -62,6 +96,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   setState(() {
                     currentIndex = 0;
+                    pageController.animateToPage(
+                      0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
                   });
                 },
                 child: Container(
@@ -73,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: currentIndex == 0
                         ? Colors.white
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -103,11 +142,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   setState(() {
                     currentIndex = 1;
+                    pageController.animateToPage(
+                      1,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
                   });
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
+                    horizontal: 10,
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
@@ -115,7 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? Colors.white
                         : Colors.transparent,
 
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -145,6 +189,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   setState(() {
                     currentIndex = 2;
+                    pageController.animateToPage(
+                      2,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
                   });
                 },
                 child: Container(
@@ -157,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: currentIndex == 2
                         ? Colors.white
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(10 ),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -187,7 +236,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      body: pages[currentIndex],
+      body: PageView(
+        controller: pageController,
+        onPageChanged: (index) {
+          setState(() {
+            currentIndex = index;
+          });
+        },
+        children: pages,
+      ),
     );
   }
 }

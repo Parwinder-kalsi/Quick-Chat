@@ -77,41 +77,45 @@ class _ContactsPageState extends State<ContactsPage> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: imageUrl.isNotEmpty
-                            ? NetworkImage(imageUrl)
-                            : null,
-                        child: imageUrl.isEmpty
-                            ? Text(name.isNotEmpty ? name[0] : "?")
-                            : null,
-                      ),
-                      title: Row(
-                        children: [
-                          Text(name,style: TextStyle(fontWeight: FontWeight.bold),),
-
-                          if (isInContacts)
-                            const Padding(
-                              padding: EdgeInsets.only(left: 6),
-                              child: Icon(
-                                Icons.check_circle,
-                                size: 16,
-                                color: Colors.green,
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: imageUrl.isNotEmpty
+                              ? NetworkImage(imageUrl)
+                              : null,
+                          child: imageUrl.isEmpty
+                              ? Text(name.isNotEmpty ? name[0] : "?")
+                              : null,
+                        ),
+                        title: Row(
+                          children: [
+                            Text(name,style: TextStyle(fontWeight: FontWeight.bold),),
+                      
+                            if (isInContacts)
+                              const Padding(
+                                padding: EdgeInsets.only(left: 6),
+                                child: Icon(
+                                  Icons.check_circle,
+                                  size: 16,
+                                  color: Colors.green,
+                                ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
+                        subtitle: Text(email,style: TextStyle(fontSize: 10),),
+                        trailing: const Icon(Icons.chat),
+                        onTap: () {
+                          Get.to(() => MessagesScreen(
+                            user: UserModel(
+                              uid: user['uid'] ?? '',
+                              name: name,
+                              imageUrl: imageUrl,
+                            ), chatId: '',
+                          ));
+                        },
                       ),
-                      subtitle: Text(email,style: TextStyle(fontSize: 10),),
-                      trailing: const Icon(Icons.chat),
-                      onTap: () {
-                        Get.to(() => MessagesScreen(
-                          user: UserModel(
-                            uid: user['uid'] ?? '',
-                            name: name,
-                            imageUrl: imageUrl,
-                          ),
-                        ));
-                      },
                     ),
                   );
                 },
